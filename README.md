@@ -1,5 +1,5 @@
 # ChatWithQwen3
-chat with qwen3 like ChatGPT
+chat with qwen3 like ChatGPT in Discord
 
 python3 -m venv venv
 
