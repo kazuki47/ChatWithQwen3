@@ -1,5 +1,6 @@
 import discord
-import requests
+import aiohttp
+import asyncio
 import os
 import re
 from dotenv import load_dotenv
@@ -29,7 +30,6 @@ async def on_message(message):
     if message.content.startswith('!chat '):
         prompt = message.content[len('!chat '):].strip()
 
-        # Qwenに送信するPayload
         payload = {
             "model": "qwen3:latest",
             "prompt": prompt,
@@ -37,19 +37,23 @@ async def on_message(message):
         }
 
         try:
-            # Qwen APIにリクエスト
-            response = requests.post(QWEN_API_URL, json=payload, timeout=180)  
-            response.raise_for_status()
+            async with aiohttp.ClientSession() as session:
+                async with session.post(QWEN_API_URL, json=payload, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                    if resp.status != 200:
+                        await message.channel.send(f"Qwen API エラー: {resp.status}")
+                        return
 
-            # レスポンスからtextを抽出し、<think>タグを削除
-            text = response.json()['response']
-            cleaned_text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+                    data = await resp.json()
+                    text = data.get('response', '')
+                    cleaned_text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
 
-            if cleaned_text:
-                await message.channel.send(cleaned_text)
-            else:
-                await message.channel.send("Qwenから返答がありませんでした。")
+                    if cleaned_text.strip():
+                        await message.channel.send(cleaned_text.strip())
+                    else:
+                        await message.channel.send("Qwenから返答がありませんでした。")
 
+        except asyncio.TimeoutError:
+            await message.channel.send("Qwen APIの応答がタイムアウトしました。")
         except Exception as e:
             print("Error:", e)
             await message.channel.send("Qwen APIとの通信でエラーが発生しました。")
